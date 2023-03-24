@@ -3,7 +3,7 @@
   <ItemGroup>
     <PackageVersion Include="McMaster.Extensions.CommandLineUtils" Version="4.0.1" />
     <PackageVersion Include="Microsoft.Build" Version="17.4.0" />
-    <PackageVersion Include="NuGet.ProjectModel" Version="6.0.0" />
+    <PackageVersion Include="NuGet.ProjectModel" Version="6.5.0" />
     <PackageVersion Include="System.IO.Abstractions" Version="14.0.13" />
   </ItemGroup>
 </Project>
