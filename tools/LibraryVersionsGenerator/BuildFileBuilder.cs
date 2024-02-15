@@ -95,7 +95,7 @@ internal sealed class BuildFileBuilder : CSharpFileBuilder
         }
 
         var arraySb = new StringBuilder();
-        arraySb.Append("new string[] {");
+        arraySb.Append("[");
 
         for (var i = 0; i < array.Length; i++)
         {
@@ -107,7 +107,7 @@ internal sealed class BuildFileBuilder : CSharpFileBuilder
             }
         }
 
-        arraySb.Append("}");
+        arraySb.Append("]");
 
         return arraySb.ToString();
     }
