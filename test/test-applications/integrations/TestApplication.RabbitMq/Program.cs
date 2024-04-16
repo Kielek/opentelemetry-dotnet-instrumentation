@@ -4,11 +4,76 @@
 using System.Text;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using TestApplication.Shared;
 
 namespace TestApplication.RabbitMq;
 
 internal static class Program
 {
+#if RABBITMQ_7_0_0_OR_GREATER
+    public static async Task Main(string[] args)
+    {
+        ConsoleHelper.WriteSplashScreen(args);
+        ConsoleHelper.WriteSplashScreen(args);
+
+        var factory = new ConnectionFactory { HostName = "localhost", Port = int.Parse(GetRabbitMqPort(args)) };
+        using var connection = await factory.CreateConnectionAsync();
+        using var channel = await connection.CreateChannelAsync();
+
+        Console.WriteLine(channel.GetType().FullName);
+
+        await channel.QueueDeclareAsync(
+            queue: "hello",
+            durable: false,
+            exclusive: false,
+            autoDelete: false,
+            arguments: null);
+
+        const string message = "Hello World!";
+        ReadOnlyMemory<byte> body = Encoding.UTF8.GetBytes(message);
+
+        await channel.BasicPublishAsync(
+            exchange: string.Empty,
+            routingKey: "hello",
+            body: body,
+            mandatory: false);
+        Console.WriteLine($"Sent: {message}");
+
+        var consumer = new AsyncEventingBasicConsumer(channel);
+
+        using var resetEvent = new ManualResetEventSlim(false);
+
+        consumer.Received += (model, ea) =>
+        {
+            var receivedBody = ea.Body.ToArray();
+            var receivedMessage = Encoding.UTF8.GetString(receivedBody);
+            Console.WriteLine($"Received: {receivedMessage}");
+            resetEvent.Set();
+            return Task.CompletedTask;
+        };
+
+        await channel.BasicConsumeAsync(queue: "hello", autoAck: true, consumer);
+
+        resetEvent.Wait(TimeSpan.FromSeconds(5));
+    }
+
+    private static Task Consumer_Received(object sender, BasicDeliverEventArgs @event)
+    {
+        throw new NotImplementedException();
+    }
+
+    private static string GetRabbitMqPort(string[] args)
+    {
+        if (args.Length > 1)
+        {
+            return args[1];
+        }
+
+        return "5672";
+    }
+
+#else
+
     private const string RoutingKey = "hello";
     private static readonly TimeSpan DefaultWaitTimeout = TimeSpan.FromSeconds(10);
     private static int _messageNumber;
@@ -17,6 +82,8 @@ internal static class Program
 
     public static int Main(string[] args)
     {
+        ConsoleHelper.WriteSplashScreen(args);
+
         var result = PublishAndConsumeWithSyncDispatcher(args);
         if (result != 0)
         {
@@ -130,16 +197,6 @@ internal static class Program
         Console.WriteLine($" [x] Sent {message}");
     }
 
-    private static string GetRabbitMqPort(string[] args)
-    {
-        if (args.Length > 1)
-        {
-            return args[1];
-        }
-
-        return "5672";
-    }
-
     private static string GetTestMessage()
     {
         return $"Hello World!{_messageNumber++}";
@@ -200,4 +257,5 @@ internal static class Program
             Received?.Invoke(this, new BasicDeliverEventArgs(consumerTag, deliveryTag, redelivered, exchange, routingKey, properties, body));
         }
     }
+#endif
 }
