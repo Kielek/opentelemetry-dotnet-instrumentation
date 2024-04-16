@@ -29,6 +29,8 @@ This component adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
   `OTEL_DOTNET_AUTO_ORACLEMDA_SET_DBSTATEMENT_FOR_TEXT` environment variable.
   ARM64 platform is not supported.
 - Add support for NServiceBus 9.x metrics and traces instrumentations.
+- Support for [RabbitMQ.Client](https://www.nuget.org/packages/RabbitMQ.Client)
+  traces instrumentation from 7.0.0-rc.1. ARM64 platform is not supported.
 
 ### Changed
 

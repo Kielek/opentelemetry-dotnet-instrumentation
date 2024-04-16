@@ -209,6 +209,17 @@ internal static class PackageVersionDefinitions
         },
         new()
         {
+            IntegrationName = "RabbitMq",
+            NugetPackageName = "RabbitMQ.Client",
+            TestApplicationName = "TestApplication.RabbitMq",
+            Versions = new List<PackageVersion>
+            {
+                new("7.0.0-rc.1"),
+                new("*")
+            }
+        },
+        new()
+        {
             IntegrationName = "StackExchangeRedis",
             NugetPackageName = "StackExchange.Redis",
             TestApplicationName = "TestApplication.StackExchangeRedis",

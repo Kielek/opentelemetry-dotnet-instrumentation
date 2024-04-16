@@ -377,6 +377,8 @@ internal static class Instrumentation
                     break;
                 case TracerInstrumentation.OracleMda:
                     break;
+                case TracerInstrumentation.RabbitMq:
+                    break;
                 default:
                     Logger.Warning($"Configured trace instrumentation type is not supported: {instrumentation}");
                     if (FailFastSettings.Value.FailFast)
