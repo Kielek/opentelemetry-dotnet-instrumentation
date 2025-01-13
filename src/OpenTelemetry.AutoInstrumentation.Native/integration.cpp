@@ -3,11 +3,7 @@
 
 #include "integration.h"
 
-#ifdef _WIN32
 #include <regex>
-#else
-#include <re2/re2.h>
-#endif
 #include <sstream>
 
 #include <unordered_map>
@@ -77,8 +73,6 @@ Version GetVersionFromAssemblyReferenceString(const WSTRING& str)
         return {major, minor, build, revision};
     }
 
-#ifdef _WIN32
-
     static auto re = std::wregex(WStr("Version=([0-9]+)\\.([0-9]+)\\.([0-9]+)\\.([0-9]+)"));
 
     std::wsmatch match;
@@ -89,13 +83,6 @@ Version GetVersionFromAssemblyReferenceString(const WSTRING& str)
         WSTRINGSTREAM(match.str(3)) >> build;
         WSTRINGSTREAM(match.str(4)) >> revision;
     }
-
-#else
-
-    static re2::RE2 re("Version=([0-9]+)\\.([0-9]+)\\.([0-9]+)\\.([0-9]+)", RE2::Quiet);
-    re2::RE2::PartialMatch(ToString(str), re, &major, &minor, &build, &revision);
-
-#endif
 
     return {major, minor, build, revision};
 }
@@ -109,26 +96,12 @@ WSTRING GetLocaleFromAssemblyReferenceString(const WSTRING& str)
         return locale;
     }
 
-#ifdef _WIN32
-
     static auto  re = std::wregex(WStr("Culture=([a-zA-Z0-9]+)"));
     std::wsmatch match;
     if (std::regex_search(str, match, re) && match.size() == 2)
     {
         locale = match.str(1);
     }
-
-#else
-
-    static re2::RE2 re("Culture=([a-zA-Z0-9]+)", RE2::Quiet);
-
-    std::string match;
-    if (re2::RE2::PartialMatch(ToString(str), re, &match))
-    {
-        locale = ToWSTRING(match);
-    }
-
-#endif
 
     return locale;
 }
@@ -142,8 +115,6 @@ PublicKey GetPublicKeyFromAssemblyReferenceString(const WSTRING& str)
         return PublicKey(data);
     }
 
-#ifdef _WIN32
-
     static auto  re = std::wregex(WStr("PublicKeyToken=([a-fA-F0-9]{16})"));
     std::wsmatch match;
     if (std::regex_search(str, match, re) && match.size() == 2)
@@ -156,23 +127,6 @@ PublicKey GetPublicKeyFromAssemblyReferenceString(const WSTRING& str)
             data[i] = BYTE(x);
         }
     }
-
-#else
-
-    static re2::RE2 re("PublicKeyToken=([a-fA-F0-9]{16})");
-    std::string     match;
-    if (re2::RE2::PartialMatch(ToString(str), re, &match))
-    {
-        for (int i = 0; i < 8; i++)
-        {
-            auto          s = match.substr(i * 2, 2);
-            unsigned long x;
-            std::stringstream(s) >> std::hex >> x;
-            data[i] = BYTE(x);
-        }
-    }
-
-#endif
 
     return PublicKey(data);
 }
