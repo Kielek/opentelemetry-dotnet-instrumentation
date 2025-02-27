@@ -92,10 +92,10 @@ public static partial class LibraryVersion
         {
             "TestApplication.MongoDB",
             [
-                new("2.19.0", supportedFrameworks: [ "net9.0", "net8.0", "net462" ]),
-                new("2.30.0", supportedFrameworks: [ "net9.0", "net8.0", "net462" ]),
-                new("3.0.0", supportedFrameworks: [ "net9.0", "net8.0", "net472" ]),
-                new("3.1.0", supportedFrameworks: [ "net9.0", "net8.0", "net472" ]),
+                new("2.19.0", supportedFrameworks: [ "net10.0", "net9.0", "net8.0", "net462" ]),
+                new("2.30.0", supportedFrameworks: [ "net10.0", "net9.0", "net8.0", "net462" ]),
+                new("3.0.0", supportedFrameworks: [ "net10.0", "net9.0", "net8.0", "net472" ]),
+                new("3.1.0", supportedFrameworks: [ "net10.0", "net9.0", "net8.0", "net472" ]),
             ]
         },
         {
@@ -116,15 +116,15 @@ public static partial class LibraryVersion
             "TestApplication.Npgsql",
             [
                 new("8.0.5"),
-                new("9.0.2", supportedFrameworks: [ "net9.0", "net8.0" ]),
+                new("9.0.2", supportedFrameworks: [ "net10.0", "net9.0", "net8.0" ]),
             ]
         },
         {
             "TestApplication.NServiceBus",
             [
                 new("8.2.5"),
-                new("9.1.0", supportedFrameworks: [ "net9.0", "net8.0" ]),
-                new("9.2.6", supportedFrameworks: [ "net9.0", "net8.0" ]),
+                new("9.1.0", supportedFrameworks: [ "net10.0", "net9.0", "net8.0" ]),
+                new("9.2.6", supportedFrameworks: [ "net10.0", "net9.0", "net8.0" ]),
             ]
         },
         {

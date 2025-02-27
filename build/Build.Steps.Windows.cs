@@ -81,6 +81,9 @@ partial class Build
             var nativeTestProject = Solution.GetNativeTestProject();
             PerformLegacyRestoreIfNeeded(nativeTestProject);
 
+            // TODO temp pin to preview version
+            MSBuildPath = @"C:\Program Files\Microsoft Visual Studio\2022\Preview\MSBuild\Current\Bin\amd64\msbuild.exe";
+
             // Can't use dotnet msbuild, as needs to use the VS version of MSBuild
             MSBuild(s => s
                 .SetTargetPath(nativeTestProject)

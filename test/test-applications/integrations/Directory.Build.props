@@ -3,6 +3,9 @@
 
   <Import Project="$(MSBuildThisFileDirectory)Integrations.props" />
 
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);NU1510</NoWarn>
+  </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)\dependency-libs\TestApplication.Shared\ConsoleHelper.cs" Link="Shared\ConsoleHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)\dependency-libs\TestApplication.Shared\ProfilerHelper.cs" Link="Shared\ProfilerHelper.cs" />
