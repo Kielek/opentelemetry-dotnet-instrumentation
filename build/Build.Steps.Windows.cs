@@ -82,6 +82,7 @@ partial class Build
 
             // Can't use dotnet msbuild, as needs to use the VS version of MSBuild
             MSBuild(s => s
+                .SetProcessToolPath(@"C:\Program Files\Microsoft Visual Studio\2022\Preview\MSBuild\Current\Bin\amd64\MSBuild.exe") // TODO remove this line, when .NET10 is released
                 .SetTargetPath(nativeTestProject)
                 .SetConfiguration(BuildConfiguration)
                 .SetRestore(!NoRestore)
