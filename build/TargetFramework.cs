@@ -12,6 +12,7 @@ public class TargetFramework : Enumeration
     public static readonly TargetFramework NETCore3_1 = new() { Value = "netcoreapp3.1" };
     public static readonly TargetFramework NET8_0 = new() { Value = "net8.0" };
     public static readonly TargetFramework NET9_0 = new() { Value = "net9.0" };
+    public static readonly TargetFramework NET10_0 = new() { Value = "net10.0" };
 
     public static readonly TargetFramework[] NetFramework = {
         NET462

@@ -8,7 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\OpenTelemetry.AutoInstrumentation\OpenTelemetry.AutoInstrumentation.csproj" />
-    <ProjectReference Include="..\..\tools\DependencyListGenerator\DependencyListGenerator.csproj" Condition=" '$(TargetFramework)' == 'net9.0' " />
+    <ProjectReference Include="..\..\tools\DependencyListGenerator\DependencyListGenerator.csproj" Condition=" '$(TargetFramework)' == 'net10.0' " />
   </ItemGroup>
 
 </Project>
