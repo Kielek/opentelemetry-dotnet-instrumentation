@@ -38,6 +38,7 @@ jobs:
           dotnet-version: | 
             8.0.413
             9.0.304
+            10.0.100-preview.7.25380.108
 
       - name: Check for NuGet packages cache
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # tag: v4.2.4
