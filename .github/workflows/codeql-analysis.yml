@@ -80,6 +80,7 @@ jobs:
         dotnet-version: | 
           8.0.412
           9.0.303
+          10.0.100-preview.6.25358.103
 
     # If the analyze step fails for one of the languages you are analyzing with
     # "We were unable to automatically build your code", modify the matrix above
