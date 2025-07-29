@@ -48,7 +48,7 @@ partial class Build
     };
 
     private static readonly IEnumerable<TargetFramework> TestFrameworks = TargetFrameworks
-        .Concat(TargetFramework.NET9_0);
+        .Concat(TargetFramework.NET9_0, TargetFramework.NET10_0);
 
     Target CreateRequiredDirectories => _ => _
         .Unlisted()
@@ -593,9 +593,10 @@ partial class Build
                     // To allow roll forward for applications, like Roslyn, that target one tfm
                     // but have a later runtime move the libraries under the original tfm folder
                     // to the latest one.
-                    if (folderRuntimeName == TargetFramework.NET8_0 || folderRuntimeName == TargetFramework.NET9_0)
+                    if (folderRuntimeName == TargetFramework.NET8_0 || folderRuntimeName == TargetFramework.NET9_0 || folderRuntimeName == TargetFramework.NET10_0)
                     {
-                        depsJson.RollFrameworkForward(TargetFramework.NET8_0, TargetFramework.NET9_0, architectureStores);
+                        depsJson.RollFrameworkForward(TargetFramework.NET8_0, TargetFramework.NET10_0, architectureStores);
+                        depsJson.RollFrameworkForward(TargetFramework.NET9_0, TargetFramework.NET10_0, architectureStores);
                     }
 
                     // Write the updated deps.json file.
