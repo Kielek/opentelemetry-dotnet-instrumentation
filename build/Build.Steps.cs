@@ -569,9 +569,9 @@ partial class Build
                 .CombineWith(TestFrameworks.ExceptNetFramework(), (p, framework) => p
                 .SetFramework(framework)
                 // Additional-deps probes the directory using SemVer format.
-                // Example: For netcoreapp3.1 framework, additional-deps uses 3.1.0 or 3.1.1 and so on.
+                // Example: For net8.0, additional-deps uses 8.0.0.
                 // Major and Minor version are extracted from framework and default value of 0 is appended for patch.
-                .SetOutput(AdditionalDepsDirectory / "shared" / "Microsoft.NETCore.App" / framework.ToString().Substring(framework.ToString().Length - 3) + ".0")));
+                .SetOutput(AdditionalDepsDirectory / "shared" / "Microsoft.NETCore.App" / framework.ToString().Substring("net".Length) + ".0")));
 
             AdditionalDepsDirectory.GlobFiles("**/*deps.json")
                 .ForEach(file =>
