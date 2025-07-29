@@ -3,7 +3,7 @@
 
 // This test is defined in NET 9.0 because the tool is written in .NET 9.0
 // The actual test is testing .NET Framework 4.6.2 context.
-#if NET9_0_OR_GREATER
+#if NET10_0_OR_GREATER
 
 using System.Reflection;
 using System.Runtime.InteropServices;
