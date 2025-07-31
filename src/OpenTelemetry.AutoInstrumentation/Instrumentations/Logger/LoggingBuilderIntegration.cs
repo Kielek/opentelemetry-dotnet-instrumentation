@@ -16,7 +16,7 @@ namespace OpenTelemetry.AutoInstrumentation.Instrumentations.Logger;
     returnTypeName: ClrNames.Void,
     parameterTypeNames: new[] { "Microsoft.Extensions.DependencyInjection.IServiceCollection" },
     minimumVersion: "9.0.0",
-    maximumVersion: "9.*.*",
+    maximumVersion: "10.*.*",
     integrationName: "ILogger",
     type: InstrumentationType.Log)]
 public static class LoggingBuilderIntegration
