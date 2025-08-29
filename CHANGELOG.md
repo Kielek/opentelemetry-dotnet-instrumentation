@@ -11,7 +11,6 @@ This component adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 - Extend support for [RabbitMQ.Client](https://www.nuget.org/packages/RabbitMQ.Client/)
   traces instrumentation for versions `5.*`.
-- Support for [file based configuration](./docs/config.md#configuration-examples)
 
 ### Changed
 

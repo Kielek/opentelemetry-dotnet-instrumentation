@@ -8,10 +8,4 @@
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Update="config.yaml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
 </Project>

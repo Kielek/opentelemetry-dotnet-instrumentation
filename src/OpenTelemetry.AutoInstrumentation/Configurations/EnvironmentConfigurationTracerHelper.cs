@@ -92,7 +92,7 @@ internal static class EnvironmentConfigurationTracerHelper
         {
             builder = traceExporter switch
             {
-                TracesExporter.Zipkin => Wrappers.AddZipkinExporter(builder, settings, pluginManager),
+                TracesExporter.Zipkin => Wrappers.AddZipkinExporter(builder, pluginManager),
                 TracesExporter.Otlp => Wrappers.AddOtlpExporter(builder, settings, pluginManager),
                 TracesExporter.Console => Wrappers.AddConsoleExporter(builder, pluginManager),
                 _ => throw new ArgumentOutOfRangeException($"Traces exporter '{traceExporter}' is incorrect")
@@ -218,15 +218,9 @@ internal static class EnvironmentConfigurationTracerHelper
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        public static TracerProviderBuilder AddZipkinExporter(TracerProviderBuilder builder, TracerSettings settings, PluginManager pluginManager)
+        public static TracerProviderBuilder AddZipkinExporter(TracerProviderBuilder builder, PluginManager pluginManager)
         {
-            return builder.AddZipkinExporter(options =>
-            {
-                options.BatchExportProcessorOptions = settings.BatchProcessorConfig.ToBatchExportProcessorOptions();
-                options.Endpoint = new Uri(settings.ZipkinSettings!.Endpoint);
-
-                pluginManager.ConfigureTracesOptions(options);
-            });
+            return builder.AddZipkinExporter(pluginManager.ConfigureTracesOptions);
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -234,8 +228,6 @@ internal static class EnvironmentConfigurationTracerHelper
         {
             return builder.AddOtlpExporter(options =>
             {
-                options.BatchExportProcessorOptions = settings.BatchProcessorConfig.ToBatchExportProcessorOptions();
-
                 // Copy Auto settings to SDK settings
                 settings.OtlpSettings?.CopyTo(options);
 

@@ -35,17 +35,6 @@ public class MockSpansCollector : IDisposable
 #endif
     }
 
-    public MockSpansCollector(ITestOutputHelper output, int port, string host = "localhost")
-    {
-        _output = output;
-
-#if NETFRAMEWORK
-        _listener = new TestHttpServer(output, HandleHttpRequests, host, port, "/v1/traces/");
-#else
-        _listener = new TestHttpServer(output, nameof(MockSpansCollector), port, new PathHandler(HandleHttpRequests, "/v1/traces"));
-#endif
-    }
-
     /// <summary>
     /// Gets the TCP port that this collector is listening on.
     /// </summary>
@@ -106,7 +95,6 @@ public class MockSpansCollector : IDisposable
                         continue;
                     }
 
-                    Console.WriteLine(resourceSpans);
                     expectationsMet.Add(resourceSpans);
                     missingExpectations.RemoveAt(i);
                     found = true;

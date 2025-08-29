@@ -151,43 +151,4 @@ public class FilebasedGeneralSettingsTests
         Assert.True(result.ContainsKey(Constants.DistributionAttributes.TelemetryDistroNameAttributeName));
         Assert.True(result.ContainsKey(Constants.DistributionAttributes.TelemetryDistroVersionAttributeName));
     }
-
-    [Fact]
-    public void LoadFile_SetsSetupSdkFromDisabledFlag()
-    {
-        var conf = new Conf
-        {
-            Disabled = true
-        };
-
-        var settings = new GeneralSettings();
-        settings.LoadFile(conf);
-
-        Assert.False(settings.SetupSdk);
-    }
-
-    [Fact]
-    public void LoadFile_SetsEnabledResourceDetectors()
-    {
-        var conf = new Conf
-        {
-            Resource = new ResourceConfiguration
-            {
-                DetectionDevelopment = new DetectionDevelopment
-                {
-                    Detectors = new DotNetDetectors
-                    {
-                        OperatingSystem = new object(),
-                        AzureAppService = new object()
-                    }
-                }
-            }
-        };
-
-        var settings = new GeneralSettings();
-        settings.LoadFile(conf);
-
-        Assert.Contains(ResourceDetector.OperatingSystem, settings.EnabledResourceDetectors);
-        Assert.Contains(ResourceDetector.AzureAppService, settings.EnabledResourceDetectors);
-    }
 }

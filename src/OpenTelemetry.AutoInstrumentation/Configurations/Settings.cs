@@ -55,5 +55,7 @@ internal abstract class Settings
     /// using the specified <see cref="Conf"/> to initialize values.
     /// </summary>
     /// <param name="configuration">The <see cref="Conf"/> to use when retrieving configuration values.</param>
-    protected abstract void OnLoadFile(Conf configuration);
+    protected virtual void OnLoadFile(Conf configuration)
+    {
+    }
 }

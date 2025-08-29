@@ -1,7 +1,6 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-using OpenTelemetry.AutoInstrumentation.Configurations.FileBasedConfiguration;
 using OpenTelemetry.AutoInstrumentation.Configurations.Otlp;
 using OpenTelemetry.AutoInstrumentation.Logging;
 
@@ -54,33 +53,12 @@ internal class TracerSettings : Settings
     /// </summary>
     public OtlpSettings? OtlpSettings { get; private set; }
 
-    /// <summary>
-    /// Gets tracing Zipkin Settings.
-    /// </summary>
-    public ZipkinExporterConfig? ZipkinSettings { get; private set; }
-
-    /// <summary>
-    /// Gets tracing Batch Processor Configuration.
-    /// </summary>
-    public BatchProcessorConfig BatchProcessorConfig { get; private set; } = new();
-
     protected override void OnLoadEnvVar(Configuration configuration)
     {
-        BatchProcessorConfig = new BatchProcessorConfig(
-            scheduleDelay: configuration.GetInt32(ConfigurationKeys.Traces.BatchSpanProcessorConfig.ScheduleDelay),
-            exportTimeout: configuration.GetInt32(ConfigurationKeys.Traces.BatchSpanProcessorConfig.ExportTimeout),
-            maxQueueSize: configuration.GetInt32(ConfigurationKeys.Traces.BatchSpanProcessorConfig.MaxQueueSize),
-            maxExportBatchSize: configuration.GetInt32(ConfigurationKeys.Traces.BatchSpanProcessorConfig.MaxExportBatchSize));
-
         TracesExporters = ParseTracesExporter(configuration);
         if (TracesExporters.Contains(TracesExporter.Otlp))
         {
             OtlpSettings = new OtlpSettings(OtlpSignalType.Traces, configuration);
-        }
-
-        if (TracesExporters.Contains(TracesExporter.Zipkin))
-        {
-            ZipkinSettings = new ZipkinExporterConfig(configuration.GetString(ConfigurationKeys.Traces.ZipkinEndpoint));
         }
 
         var instrumentationEnabledByDefault =
@@ -113,58 +91,6 @@ internal class TracerSettings : Settings
         OpenTracingEnabled = configuration.GetBool(ConfigurationKeys.Traces.OpenTracingEnabled) ?? false;
 
         InstrumentationOptions = new InstrumentationOptions(configuration);
-    }
-
-    protected override void OnLoadFile(Conf configuration)
-    {
-        if (configuration.TracerProvider != null &&
-            configuration.TracerProvider.Processors != null &&
-            configuration.TracerProvider.Processors.TryGetValue("batch", out var batchProcessorConfig))
-        {
-            TracesEnabled = true;
-            BatchProcessorConfig = batchProcessorConfig;
-            var exporters = BatchProcessorConfig.Exporter;
-            var tracesExporters = new List<TracesExporter>();
-            if (exporters != null)
-            {
-                if (exporters.OtlpGrpc != null)
-                {
-                    tracesExporters.Add(TracesExporter.Otlp);
-                    OtlpSettings = new OtlpSettings(OtlpSignalType.Traces, exporters.OtlpGrpc);
-                }
-
-                if (exporters.OtlpHttp != null)
-                {
-                    tracesExporters.Add(TracesExporter.Otlp);
-                    OtlpSettings = new OtlpSettings(OtlpSignalType.Traces, exporters.OtlpHttp);
-                }
-
-                if (exporters.Zipkin != null)
-                {
-                    tracesExporters.Add(TracesExporter.Zipkin);
-                    ZipkinSettings = exporters.Zipkin;
-                }
-
-                if (exporters.Console != null)
-                {
-                    tracesExporters.Add(TracesExporter.Console);
-                }
-
-                TracesExporters = tracesExporters;
-            }
-        }
-        else
-        {
-            TracesEnabled = false;
-        }
-
-        var tracesInstrumentations = configuration.InstrumentationDevelopment?.DotNet?.Traces;
-        if (tracesInstrumentations != null)
-        {
-            EnabledInstrumentations = tracesInstrumentations.GetEnabledInstrumentations();
-        }
-
-        InstrumentationOptions = new InstrumentationOptions(tracesInstrumentations);
     }
 
     private static IReadOnlyList<TracesExporter> ParseTracesExporter(Configuration configuration)

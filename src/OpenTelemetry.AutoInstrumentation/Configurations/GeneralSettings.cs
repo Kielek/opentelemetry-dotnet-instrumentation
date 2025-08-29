@@ -93,12 +93,6 @@ internal class GeneralSettings : Settings
 
     protected override void OnLoadFile(Conf configuration)
     {
-        var detectors = configuration.Resource?.DetectionDevelopment?.Detectors;
-        if (detectors != null)
-        {
-            EnabledResourceDetectors = detectors.GetEnabledResourceDetector();
-        }
-
         var baseResources = new List<KeyValuePair<string, object>>
         {
             new(Constants.DistributionAttributes.TelemetryDistroNameAttributeName, Constants.DistributionAttributes.TelemetryDistroNameAttributeValue),
@@ -135,8 +129,6 @@ internal class GeneralSettings : Settings
         }
 
         Resources = merged.ToList();
-
-        SetupSdk = !configuration.Disabled;
     }
 
     private static List<KeyValuePair<string, object>> ParseResourceAttributes(string? resourceAttributes)
