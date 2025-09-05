@@ -29,6 +29,9 @@ internal class EndOfSupportRule : Rule
             case 9:
                 eosDate = new DateTime(2026, 05, 12);
                 break;
+            case 10:
+                // TODO: update when EoS date is announced
+                return true; // .NET 10 is LTS, no EoS date announced yet
             default:
                 return true; // just return, not able to verify anything here
         }
