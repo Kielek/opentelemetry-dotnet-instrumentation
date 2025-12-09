@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<hibernate-mapping xmlns="urn:nhibernate-mapping-2.2" assembly="TestApplication.NHibernate" namespace="TestApplication.NHibernate">
+  <class name="Person" table="Persons" lazy="false">
+    <id name="Id" column="Id" type="int">
+      <generator class="identity" />
+    </id>
+    <property name="Name" column="Name" type="string" length="255" />
+    <property name="Age" column="Age" type="int" />
+  </class>
+</hibernate-mapping>
+

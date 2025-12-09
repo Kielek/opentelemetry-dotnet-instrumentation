@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net462</TargetFrameworks>
+    <NoWarn>$(NoWarn);NU1903;NU1603;NU1701;</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NHibernate" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Person.hbm.xml" />
+  </ItemGroup>
+
+</Project>
