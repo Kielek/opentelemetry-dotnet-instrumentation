@@ -6,6 +6,7 @@
     <PackageVersion Include="CoreWCF.Http" Version="1.8.0" />
     <PackageVersion Include="CoreWCF.NetTcp" Version="1.8.0" />
     <PackageVersion Include="CoreWCF.Primitives" Version="1.8.0" />
+    <PackageVersion Include="Devart.Data.Oracle" Version="9.10.909.0" />
     <PackageVersion Include="Elastic.Clients.Elasticsearch" Version="9.2.2" />
     <PackageVersion Include="Google.Protobuf" Version="3.33.4" />
     <PackageVersion Include="GraphQL" Version="8.8.3" />
