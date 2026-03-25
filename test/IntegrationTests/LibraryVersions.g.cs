@@ -29,6 +29,23 @@ public static partial class LibraryVersion
             return theoryData;
         }
     }
+    public static TheoryData<string> DevartOracle
+    {
+        get
+        {
+            TheoryData<string> theoryData =
+            [
+#if DEFAULT_TEST_PACKAGE_VERSIONS
+                string.Empty,
+#else
+                "9.10.909",
+                "10.0.0",
+                "11.1.35",
+#endif
+            ];
+            return theoryData;
+        }
+    }
     public static TheoryData<string> Elasticsearch
     {
         get
@@ -468,6 +485,7 @@ public static partial class LibraryVersion
     public static readonly IReadOnlyDictionary<string, TheoryData<string>> LookupMap = new Dictionary<string, TheoryData<string>>
     {
        { "Azure", Azure },
+       { "DevartOracle", DevartOracle },
        { "Elasticsearch", Elasticsearch },
        { "EntityFrameworkCore", EntityFrameworkCore },
        { "EntityFrameworkCorePomeloMySql", EntityFrameworkCorePomeloMySql },

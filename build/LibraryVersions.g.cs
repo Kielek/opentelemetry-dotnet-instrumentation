@@ -23,6 +23,14 @@ public static partial class LibraryVersion
             ]
         },
         {
+            "TestApplication.Devart.Oracle",
+            [
+                new("9.10.909"),
+                new("10.0.0"),
+                new("11.1.35"),
+            ]
+        },
+        {
             "TestApplication.Elasticsearch",
             [
                 new("8.15.10"),

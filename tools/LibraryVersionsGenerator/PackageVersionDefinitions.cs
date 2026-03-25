@@ -23,6 +23,18 @@ internal static class PackageVersionDefinitions
         },
         new()
         {
+            IntegrationName = "DevartOracle",
+            NugetPackageName = "Devart.Data.Oracle",
+            TestApplicationName = "TestApplication.Devart.Oracle",
+            Versions =
+            [
+                new("9.10.909"),
+                new("10.0.0"),
+                new("*")
+            ]
+        },
+        new()
+        {
             IntegrationName = "Elasticsearch",
             NugetPackageName = "Elastic.Clients.Elasticsearch",
             TestApplicationName = "TestApplication.Elasticsearch",

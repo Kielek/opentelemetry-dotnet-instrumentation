@@ -1,0 +1,5 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Devart.Data.Oracle" VersionOverride="9.10.909" />
+  </ItemGroup>
+</Project>
