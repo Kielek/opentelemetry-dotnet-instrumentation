@@ -78,16 +78,6 @@ function Download-OpenTelemetry([string]$Version, [string]$Path) {
     return $dlPath
 }
 
-function Download-OpenTelemetry-Install-Module([string]$Version, [string]$Path) {
-    $module = "OpenTelemetry.DotNet.Auto.psm1"
-    $dlUrl = "https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/$Version/$module"
-    $dlPath = Join-Path $Path $module
-
-    Invoke-WebRequest -Uri $dlUrl -OutFile $dlPath -UseBasicParsing
-
-    return $dlPath
-}
-
 function Get-Environment-Variables-Table([string]$InstallDir, [string]$OTelServiceName) {
     $COR_PROFILER_PATH_32 = Join-Path $InstallDir "/win-x86/OpenTelemetry.AutoInstrumentation.Native.dll"
     $COR_PROFILER_PATH_64 = Join-Path $InstallDir "/win-x64/OpenTelemetry.AutoInstrumentation.Native.dll"
@@ -471,21 +461,14 @@ function Update-OpenTelemetryCore() {
     }
 
     $tempDir = Get-Temp-Directory
-    $modulePath = Download-OpenTelemetry-Install-Module $newestInstallVersion $tempDir
+    $archivePath = Download-OpenTelemetry $newestInstallVersion $tempDir
+    Install-OpenTelemetryCore -InstallDir $installDir -LocalPath $archivePath -RegisterAssembliesInGAC $RegisterAssembliesInGAC
 
-    Remove-Module OpenTelemetry.Dotnet.Auto
-    Import-Module $modulePath
-
-    Install-OpenTelemetryCore -InstallDir $installDir -RegisterAssembliesInGAC $RegisterAssembliesInGAC
     if ($RegisterIIS) {
         Register-OpenTelemetryForIIS
     }
 
-    # Release module
-    Remove-Module OpenTelemetry.Dotnet.Auto
-    
-    # Cache install module
-    Move-Item -Path $modulePath -Destination $installDir
+    Remove-Item $archivePath
 }
 
 <#
