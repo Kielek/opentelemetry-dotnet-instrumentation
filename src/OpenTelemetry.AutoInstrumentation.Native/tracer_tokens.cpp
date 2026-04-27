@@ -94,6 +94,7 @@ HRESULT TracerTokens::WriteBeginMethodWithArgumentsArray(void*           rewrite
     ULONG    currentTypeSize = CorSigCompressToken(currentTypeRef, &currentTypeBuffer);
 
     auto          signatureLength = 4 + integrationTypeSize + currentTypeSize;
+
     COR_SIGNATURE signature[signatureBufferSize];
     unsigned      offset = 0;
     signature[offset++]  = IMAGE_CEE_CS_CALLCONV_GENERICINST;
@@ -288,6 +289,12 @@ HRESULT TracerTokens::WriteBeginMethod(void*                             rewrite
             argumentsSignatureSize[i] = signatureSize;
             signatureLength += signatureSize;
         }
+    }
+
+    if (signatureLength > signatureBufferSize)
+    {
+        Logger::Debug("BeginMethod fast-path signature is too large for buffer. Falling back to arguments array path.");
+        return WriteBeginMethodWithArgumentsArray(rewriterWrapperPtr, integrationTypeRef, currentType, instruction);
     }
 
     COR_SIGNATURE signature[signatureBufferSize];
