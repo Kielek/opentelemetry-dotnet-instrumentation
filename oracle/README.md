@@ -13,9 +13,66 @@ docker compose up --build --abort-on-container-exit
 
 The compose stack starts:
 
-- `oracle`: Oracle ADB Free, ATP workload, wallet generated into a shared volume.
-- `otel-collector`: OTLP gRPC/HTTP receiver with detailed debug exporter.
+- `oracle`: Oracle ADB Free, ATP workload, wallet generated into a shared volume. The image is built locally from `OracleServer.Dockerfile`.
+- `otel-collector`: OTLP gRPC receiver and OTLP/HTTP HTTPS receiver with detailed debug exporter.
 - `app`: .NET 10 console app using OpenTelemetry SDK/exporter packages and `Oracle.ManagedDataAccess.Core`.
+
+## Demo TLS certificates
+
+Oracle server-side OTLP/HTTP export is configured to use HTTPS:
+
+```text
+https://otel-collector:4318/v1/traces
+```
+
+The collector's OTLP/HTTP receiver on port `4318` therefore uses TLS. The demo uses a local, non-production certificate chain:
+
+- `certs/otel-demo-root-ca.crt`: local demo root CA.
+- `certs/otel-collector.crt`: collector leaf certificate signed by that root CA. It has SANs for `otel-collector`, `localhost`, and `127.0.0.1`.
+- `certs/otel-collector.key`: collector leaf private key.
+
+`otel-collector.yaml` mounts the leaf certificate and private key into the collector. `OracleServer.Dockerfile` builds a local Oracle image from Oracle ADB Free `26.2.4.2-26ai` and installs `otel-demo-root-ca.crt` into Oracle Linux trust with `update-ca-trust extract`.
+
+This is diagnostic-only. Do not reuse these certificates or private keys outside local testing. For a real deployment, use a certificate issued by the environment's trusted CA and configure Oracle trust through the supported Oracle path for that environment.
+
+You can verify from inside the Oracle container that the collector certificate chains to the local root CA:
+
+```powershell
+docker compose exec oracle bash -lc "openssl s_client -connect otel-collector:4318 -servername otel-collector -verify_return_error </dev/null 2>&1 | grep -E 'subject=|issuer=|Verify return code'"
+```
+
+Expected result:
+
+```text
+subject=CN = otel-collector
+issuer=CN = otel-demo-root-ca
+Verify return code: 0 (ok)
+```
+
+To regenerate the local diagnostic certificates, run from `oracle/` on a machine with OpenSSL:
+
+```bash
+mkdir -p certs
+openssl genrsa -out certs/otel-demo-root-ca.key 4096
+openssl req -x509 -new -nodes -key certs/otel-demo-root-ca.key -sha256 -days 3650 -subj "/CN=otel-demo-root-ca" -out certs/otel-demo-root-ca.crt
+openssl genrsa -out certs/otel-collector.key 2048
+openssl req -new -key certs/otel-collector.key -subj "/CN=otel-collector" -out certs/otel-collector.csr
+printf "%s\n" \
+  "subjectAltName=DNS:otel-collector,DNS:localhost,IP:127.0.0.1" \
+  "basicConstraints=CA:FALSE" \
+  "keyUsage=digitalSignature,keyEncipherment" \
+  "extendedKeyUsage=serverAuth" > certs/otel-collector.ext
+openssl x509 -req -in certs/otel-collector.csr -CA certs/otel-demo-root-ca.crt -CAkey certs/otel-demo-root-ca.key -CAcreateserial -out certs/otel-collector.crt -days 3650 -sha256 -extfile certs/otel-collector.ext
+chmod 0644 certs/otel-demo-root-ca.crt certs/otel-collector.crt certs/otel-collector.key
+```
+
+Only the `.crt` root, `.crt` leaf, and `.key` leaf are needed by compose. The generated root private key and CSR/extension/serial files are local regeneration artifacts and should not be committed or shared.
+
+If the collector fails with `permission denied` while opening `/etc/otelcol-contrib/certs/otel-collector.key`, make the generated key readable by the non-root collector process:
+
+```powershell
+docker run --rm -v "${PWD}\certs:/certs" mcr.microsoft.com/dotnet/runtime:10.0 bash -lc "chmod 0644 /certs/otel-collector.key /certs/otel-collector.crt"
+```
 
 After a run, inspect collector output:
 
@@ -27,6 +84,22 @@ Clean all containers and wallet state:
 
 ```powershell
 docker compose down -v
+```
+
+## Oracle image note
+
+The newer `ghcr.io/oracle/adb-free:26.5.4.2-26ai` image was tested. It reports Oracle database version `23.26.2.1.0`, but in this environment `DBMS_OBSERVABILITY.show_service_status(dbms_observability.all_info)` showed `Traces` and `Logs` enabled at the container level while runtime remained disabled, even after `dbms_observability.enable_service` and a container restart.
+
+This demo therefore uses the older `26.2.4.2-26ai` base image because it reports the expected runtime state:
+
+```json
+{
+  "Runtime": [
+    { "Service": "Traces", "Enabled": 1 },
+    { "Service": "Logs", "Enabled": 1 },
+    { "Option": "Capture traces", "Enabled": 1 }
+  ]
+}
 ```
 
 ## What to look for
@@ -56,14 +129,14 @@ The evidence is the Oracle diagnostic trace archive, not a server-side OTLP span
 
 - Scope: `Oracle.ManagedDataAccess.Core 23.26.200`
 - Span name: `SendExecuteRequest`
-- Trace ID: `9a2a7deedd2b576083e78923a00b6dc5`
-- Span ID: `d00a2b6269bf0fdb`
+- Trace ID: `f856138e43c6f9a29793fe67d103d7b9`
+- Span ID: `ca03e2b341937498`
 
 Oracle archived the same trace ID and span ID as the parent ID in its diagnostic trace files:
 
 ```text
-/u01/app/oracle/diag/rdbms/pod1/POD1/trace/POD1_dt01_678.trc:43:
-KSTRC: Operation [traceid-9a2a7deedd2b576083e78923a00b6dc5:parentid-d00a2b6269bf0fdb] ... archived to: ksu_ops_POD1.trc
+/u01/app/oracle/diag/rdbms/pod1/POD1/trace/POD1_dt01_647.trc:43:
+KSTRC: Operation [traceid-f856138e43c6f9a29793fe67d103d7b9:parentid-ca03e2b341937498] ... archived to: ksu_ops_POD1.trc
 ```
 
 That confirms that the trace context reached the Oracle server and was associated with server-side work.
@@ -73,13 +146,28 @@ However, no separate Oracle server-side OTLP trace spans were observed on the co
 ```text
 Service "Traces": Enabled
 Option "Capture traces": Enabled
-Endpoint "http://otel-collector:4318/v1/traces": Enabled
+Endpoint "https://otel-collector:4318/v1/traces": Enabled
 ```
 
 The exposed `DBMS_OBSERVABILITY` package surface did not show a flush/export procedure that could force queued spans to be sent immediately. So the current conclusion is:
 
 - Propagation to the Oracle server: validated through Oracle diagnostic trace archive.
 - Server-side OTLP span export to the collector: not observed in this demo run.
+
+The 1000-iteration DML workload can be used to generate more database work:
+
+```powershell
+docker compose run --rm --no-deps -e WORKLOAD=dml -e ITERATIONS=1000 -e DELAY_SECONDS=0 -e FLUSH_SECONDS=60 -e LOG_EVERY=100 app
+```
+
+In the latest local run, the collector received 5010 app/ODP.NET spans across these scopes only:
+
+```text
+InstrumentationScope Oracle.ManagedDataAccess.Core 23.26.200
+InstrumentationScope OracleMdaSdkDemo 1.0.0
+```
+
+The Oracle diagnostic archive contained 2008 `KSTRC` archived operations, confirming propagated context at volume, but no separate Oracle server-side OTLP spans appeared in collector output.
 
 ## Local run
 

@@ -5,6 +5,9 @@ receivers:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
+        tls:
+          cert_file: /etc/otelcol-contrib/certs/otel-collector.crt
+          key_file: /etc/otelcol-contrib/certs/otel-collector.key
 
 processors:
   batch:

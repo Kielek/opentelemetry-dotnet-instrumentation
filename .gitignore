@@ -40,6 +40,13 @@ TestResult.xml
 [Rr]eleasePS/
 dlldata.c
 
+# Oracle demo certificate regeneration artifacts. The collector leaf key is
+# intentionally not ignored because the local demo collector mounts it.
+oracle/certs/otel-demo-root-ca.key
+oracle/certs/otel-collector.csr
+oracle/certs/otel-collector.ext
+oracle/certs/otel-demo-root-ca.srl
+
 # DNX
 project.lock.json
 project.fragment.lock.json

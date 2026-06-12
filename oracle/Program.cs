@@ -23,7 +23,8 @@ var resourceBuilder = ResourceBuilder
     [
         new KeyValuePair<string, object>("demo.oracle.data_source", settings.OracleDataSource),
         new KeyValuePair<string, object>("demo.oracle.configure_db_observability", settings.ConfigureDatabaseObservability),
-        new KeyValuePair<string, object>("demo.oracle.database_open_telemetry_tracing", settings.DatabaseOpenTelemetryTracing)
+        new KeyValuePair<string, object>("demo.oracle.database_open_telemetry_tracing", settings.DatabaseOpenTelemetryTracing),
+        new KeyValuePair<string, object>("demo.oracle.workload", settings.Workload)
     ]);
 
 using var activitySource = new ActivitySource(ActivitySourceName, "1.0.0");
@@ -98,10 +99,17 @@ if (settings.ConfigureDatabaseObservability)
     await TryConfigureDatabaseObservabilityAsync(connectionString, settings, logger).ConfigureAwait(false);
 }
 
-for (var iteration = 1; iteration <= settings.Iterations; iteration++)
+if (settings.Workload.Equals("dml", StringComparison.OrdinalIgnoreCase))
 {
-    await RunQueryAsync(connectionString, settings, iteration, activitySource, queryCounter, queryDuration, logger).ConfigureAwait(false);
-    await Task.Delay(settings.DelayBetweenQueries).ConfigureAwait(false);
+    await RunDmlWorkloadAsync(connectionString, settings, activitySource, queryCounter, queryDuration, logger).ConfigureAwait(false);
+}
+else
+{
+    for (var iteration = 1; iteration <= settings.Iterations; iteration++)
+    {
+        await RunQueryAsync(connectionString, settings, iteration, activitySource, queryCounter, queryDuration, logger).ConfigureAwait(false);
+        await Task.Delay(settings.DelayBetweenQueries).ConfigureAwait(false);
+    }
 }
 
 logger.LogInformation(
@@ -214,6 +222,92 @@ static async Task RunQueryAsync(
     queryDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new KeyValuePair<string, object?>("db.system", "oracle"));
 }
 
+static async Task RunDmlWorkloadAsync(
+    string connectionString,
+    DemoSettings settings,
+    ActivitySource activitySource,
+    Counter<long> queryCounter,
+    Histogram<double> queryDuration,
+    ILogger logger)
+{
+    await using var connection = CreateOracleConnection(connectionString, settings);
+    await connection.OpenAsync().ConfigureAwait(false);
+
+    await ExecuteNonQueryAsync(
+        connection,
+        """
+        begin
+          execute immediate 'drop table otel_demo_workload purge';
+        exception
+          when others then
+            if sqlcode != -942 then
+              raise;
+            end if;
+        end;
+        """).ConfigureAwait(false);
+
+    await ExecuteNonQueryAsync(
+        connection,
+        """
+        create table otel_demo_workload (
+          id number not null,
+          payload varchar2(100),
+          created_at timestamp default systimestamp not null
+        )
+        """).ConfigureAwait(false);
+
+    logger.LogInformation("DML workload table is ready. Starting {Iterations} insert/delete iteration(s).", settings.Iterations);
+
+    await using var insertCommand = connection.CreateCommand();
+    insertCommand.CommandText = "insert into otel_demo_workload(id, payload) values (:id, :payload)";
+    insertCommand.Parameters.Add("id", OracleDbType.Int32);
+    insertCommand.Parameters.Add("payload", OracleDbType.Varchar2, 100);
+
+    await using var deleteCommand = connection.CreateCommand();
+    deleteCommand.CommandText = "delete from otel_demo_workload where id = :id";
+    deleteCommand.Parameters.Add("id", OracleDbType.Int32);
+
+    for (var iteration = 1; iteration <= settings.Iterations; iteration++)
+    {
+        using var activity = activitySource.StartActivity("oracle.demo.dml", ActivityKind.Client);
+        activity?.SetTag("db.system", "oracle");
+        activity?.SetTag("db.operation.name", "INSERT_DELETE");
+        activity?.SetTag("demo.iteration", iteration);
+
+        var stopwatch = Stopwatch.StartNew();
+
+        insertCommand.Parameters["id"].Value = iteration;
+        insertCommand.Parameters["payload"].Value = $"payload-{iteration}";
+        _ = await insertCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
+
+        deleteCommand.Parameters["id"].Value = iteration;
+        _ = await deleteCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
+
+        stopwatch.Stop();
+        queryCounter.Add(2, new KeyValuePair<string, object?>("db.system", "oracle"));
+        queryDuration.Record(stopwatch.Elapsed.TotalMilliseconds, new KeyValuePair<string, object?>("db.system", "oracle"));
+
+        if (iteration == 1 || iteration == settings.Iterations || iteration % settings.LogEvery == 0)
+        {
+            logger.LogInformation("DML workload completed iteration {Iteration}/{Iterations}.", iteration, settings.Iterations);
+        }
+
+        if (settings.DelayBetweenQueries > TimeSpan.Zero)
+        {
+            await Task.Delay(settings.DelayBetweenQueries).ConfigureAwait(false);
+        }
+    }
+
+    await ExecuteNonQueryAsync(connection, "drop table otel_demo_workload purge").ConfigureAwait(false);
+}
+
+static async Task ExecuteNonQueryAsync(OracleConnection connection, string commandText)
+{
+    await using var command = connection.CreateCommand();
+    command.CommandText = commandText;
+    await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+}
+
 static string EscapeSqlLiteral(string value)
 {
     return value.Replace("'", "''", StringComparison.Ordinal);
@@ -241,7 +335,9 @@ file sealed record DemoSettings(
     bool ConfigureDatabaseObservability,
     bool DatabaseOpenTelemetryTracing,
     Uri DatabaseOtlpTracesEndpoint,
+    string Workload,
     int Iterations,
+    int LogEvery,
     TimeSpan DelayBetweenQueries,
     TimeSpan FlushDelay,
     TimeSpan OracleStartupTimeout)
@@ -260,7 +356,9 @@ file sealed record DemoSettings(
             ConfigureDatabaseObservability: ReadBool("CONFIGURE_DB_OBSERVABILITY", true),
             DatabaseOpenTelemetryTracing: ReadBool("ORACLE_DATABASE_OPEN_TELEMETRY_TRACING", true),
             DatabaseOtlpTracesEndpoint: ReadUri("ORACLE_DB_OTLP_TRACES_ENDPOINT", "http://otel-collector:4318/v1/traces"),
+            Workload: ReadString("WORKLOAD", "select"),
             Iterations: ReadInt("ITERATIONS", 3),
+            LogEvery: ReadInt("LOG_EVERY", 100),
             DelayBetweenQueries: TimeSpan.FromSeconds(ReadInt("DELAY_SECONDS", 2)),
             FlushDelay: TimeSpan.FromSeconds(ReadInt("FLUSH_SECONDS", 10)),
             OracleStartupTimeout: TimeSpan.FromMinutes(ReadInt("ORACLE_STARTUP_TIMEOUT_MINUTES", 10)));
