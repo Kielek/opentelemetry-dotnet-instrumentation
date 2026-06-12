@@ -13,7 +13,7 @@ docker compose up --build --abort-on-container-exit
 
 The compose stack starts:
 
-- `oracle`: Oracle ADB Free, ATP workload, wallet generated into a shared volume. The image is built locally from `OracleServer.Dockerfile`.
+- `oracle`: Oracle ADB Free `26.5.4.2-26ai`, ATP workload, wallet generated into a shared volume. The image is built locally from `OracleServer.Dockerfile`.
 - `otel-collector`: OTLP gRPC receiver and OTLP/HTTP HTTPS receiver with detailed debug exporter.
 - `app`: .NET 10 console app using OpenTelemetry SDK/exporter packages and `Oracle.ManagedDataAccess.Core`.
 
@@ -37,7 +37,7 @@ The collector's OTLP/HTTP receiver on port `4318` therefore uses TLS. The demo u
 - `http://otel-crl:8080/otel-demo-root-ca.crl` from Docker containers, including Oracle.
 - `http://localhost:8080/otel-demo-root-ca.crl` from the host.
 
-`OracleServer.Dockerfile` builds a local Oracle image from Oracle ADB Free `26.2.4.2-26ai` and installs `otel-demo-root-ca.crt` into Oracle Linux trust with `update-ca-trust extract`.
+`OracleServer.Dockerfile` builds a local Oracle image from Oracle ADB Free `26.5.4.2-26ai` and installs `otel-demo-root-ca.crt` into Oracle Linux trust with `update-ca-trust extract`.
 
 This is diagnostic-only. Do not reuse these certificates or private keys outside local testing. For a real deployment, use a certificate issued by the environment's trusted CA and configure Oracle trust through the supported Oracle path for that environment.
 
@@ -111,9 +111,38 @@ docker compose down -v
 
 ## Oracle image note
 
-The newer `ghcr.io/oracle/adb-free:26.5.4.2-26ai` image was tested. It reports Oracle database version `23.26.2.1.0`, but in this environment `DBMS_OBSERVABILITY.show_service_status(dbms_observability.all_info)` showed `Traces` and `Logs` enabled at the container level while runtime remained disabled, even after `dbms_observability.enable_service` and a container restart.
+The demo currently uses `ghcr.io/oracle/adb-free:26.5.4.2-26ai`, pinned by digest in `OracleServer.Dockerfile`. This image reports Oracle database version `23.26.2.1.0`.
 
-This demo therefore uses the older `26.2.4.2-26ai` base image because it reports the expected runtime state:
+This newer image is useful for reproducing the server-side export issue. In this environment `DBMS_OBSERVABILITY.show_service_status(dbms_observability.all_info)` fails because the `all_info` constant is not available:
+
+```text
+ORA-06553: PLS-221: 'ALL_INFO' is not a procedure or is undefined
+```
+
+Use numeric status selector `0` instead:
+
+```sql
+select dbms_observability.show_service_status(0) from dual;
+```
+
+After a clean rebuild and a successful app run, the newer image still reports runtime traces and logs disabled while the container-level service state is enabled:
+
+```json
+{
+  "Runtime": [
+    { "Service": "Traces", "Enabled": 0 },
+    { "Service": "Logs", "Enabled": 0 },
+    { "Option": "Capture traces", "Enabled": 1 }
+  ],
+  "Container": [
+    { "Service": "Traces", "Enabled": 1 },
+    { "Service": "Logs", "Enabled": 1 },
+    { "Option": "Capture traces", "Enabled": 1 }
+  ]
+}
+```
+
+The older `26.2.4.2-26ai` image was previously tested as a comparison point and reported the expected runtime state:
 
 ```json
 {
@@ -148,26 +177,35 @@ The intended comparison is whether any database server-side spans appear in coll
 
 In this environment, span context propagation from the application to the Oracle server is working.
 
-The evidence is the Oracle diagnostic trace archive, not a server-side OTLP span. For a post-configuration query, the collector reported an ODP.NET client span:
-
-- Scope: `Oracle.ManagedDataAccess.Core 23.26.200`
-- Span name: `SendExecuteRequest`
-- Trace ID: `f856138e43c6f9a29793fe67d103d7b9`
-- Span ID: `ca03e2b341937498`
-
-Oracle archived the same trace ID and span ID as the parent ID in its diagnostic trace files:
+The evidence is the Oracle diagnostic trace archive, not a server-side OTLP span. In a clean run on the current `26.5.4.2-26ai` image, the simple select workload completed successfully and the collector received 13 app/ODP.NET span records across these scopes only:
 
 ```text
-/u01/app/oracle/diag/rdbms/pod1/POD1/trace/POD1_dt01_647.trc:43:
-KSTRC: Operation [traceid-f856138e43c6f9a29793fe67d103d7b9:parentid-ca03e2b341937498] ... archived to: ksu_ops_POD1.trc
+InstrumentationScope Oracle.ManagedDataAccess.Core 23.26.200
+InstrumentationScope OracleMdaSdkDemo 1.0.0
+```
+
+Oracle archived the same trace IDs in its diagnostic trace files:
+
+```text
+/u01/app/oracle/diag/rdbms/pod1/POD1/trace/POD1_dt01_647.trc:39:
+KSTRC: Operation [traceid-63991d267e44349fe747719b75e058cd:parentid-75b1203475a3cc23] ... archived to: ksu_ops_POD1.trc
+
+/u01/app/oracle/diag/rdbms/pod1/POD1/trace/POD1_dt00_645.trc:39:
+KSTRC: Operation [traceid-8af78a326f57bdbc7e52acc020f111aa:parentid-63a8c0371452b672] ... archived to: ksu_ops_POD1.trc
+
+/u01/app/oracle/diag/rdbms/pod1/POD1/trace/POD1_dt00_645.trc:42:
+KSTRC: Operation [traceid-3ffeb44f3b856853c82c795542b03584:parentid-6a299fcd218c0152] ... archived to: ksu_ops_POD1.trc
 ```
 
 That confirms that the trace context reached the Oracle server and was associated with server-side work.
 
-However, no separate Oracle server-side OTLP trace spans were observed on the collector in this setup. The collector received the app/ODP.NET spans from `service.name=oracle-mda-sdk-demo`, but after waiting for delayed export, there was no additional trace batch attributable to the Oracle server. `DBMS_OBSERVABILITY` reported tracing and the OTLP endpoint as enabled:
+However, no separate Oracle server-side OTLP trace spans were observed on the collector in this setup. The collector received the app/ODP.NET spans from `service.name=oracle-mda-sdk-demo`, but after waiting for delayed export, there was no additional trace batch attributable to the Oracle server.
+
+On the current newer image, `DBMS_OBSERVABILITY` reports the OTLP endpoint as enabled but runtime traces/logs as disabled:
 
 ```text
-Service "Traces": Enabled
+Runtime Service "Traces": Disabled
+Runtime Service "Logs": Disabled
 Option "Capture traces": Enabled
 Endpoint "https://otel-collector:4318/v1/traces": Enabled
 ```
@@ -183,7 +221,7 @@ The 1000-iteration DML workload can be used to generate more database work:
 docker compose run --rm --no-deps -e WORKLOAD=dml -e ITERATIONS=1000 -e DELAY_SECONDS=0 -e FLUSH_SECONDS=60 -e LOG_EVERY=100 app
 ```
 
-In the latest local run, the collector received 5010 app/ODP.NET spans across these scopes only:
+A previous 1000-iteration DML run produced 5010 app/ODP.NET spans across these scopes only:
 
 ```text
 InstrumentationScope Oracle.ManagedDataAccess.Core 23.26.200

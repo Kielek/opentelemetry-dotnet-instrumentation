@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: OracleServer.Dockerfile
-    image: oracle-mda-sdk-demo-oracle:26.2.4.2-26ai-local-ca
+    image: oracle-mda-sdk-demo-oracle:26.5.4.2-26ai-local-ca
     privileged: true
     environment:
       WORKLOAD_TYPE: ATP
@@ -39,9 +39,11 @@ services:
       - "4318:4318"
 
   otel-crl:
-    image: oracle-mda-sdk-demo-oracle:26.2.4.2-26ai-local-ca
+    image: oracle-mda-sdk-demo-oracle:26.5.4.2-26ai-local-ca
     entrypoint: ["bash", "-lc"]
     command: ["cd /certs && python3 -m http.server 8080 --bind 0.0.0.0"]
+    healthcheck:
+      disable: true
     volumes:
       - ./certs:/certs:ro
     ports:
