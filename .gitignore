@@ -46,6 +46,7 @@ oracle/certs/otel-demo-root-ca.key
 oracle/certs/otel-collector.csr
 oracle/certs/otel-collector.ext
 oracle/certs/otel-demo-root-ca.srl
+oracle/certs/ca/
 
 # DNX
 project.lock.json

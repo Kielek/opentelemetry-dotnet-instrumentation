@@ -38,6 +38,15 @@ services:
       - "4317:4317"
       - "4318:4318"
 
+  otel-crl:
+    image: oracle-mda-sdk-demo-oracle:26.2.4.2-26ai-local-ca
+    entrypoint: ["bash", "-lc"]
+    command: ["cd /certs && python3 -m http.server 8080 --bind 0.0.0.0"]
+    volumes:
+      - ./certs:/certs:ro
+    ports:
+      - "8080:8080"
+
   app:
     build:
       context: .
@@ -46,6 +55,8 @@ services:
       oracle:
         condition: service_healthy
       otel-collector:
+        condition: service_started
+      otel-crl:
         condition: service_started
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317

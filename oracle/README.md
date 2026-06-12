@@ -28,10 +28,16 @@ https://otel-collector:4318/v1/traces
 The collector's OTLP/HTTP receiver on port `4318` therefore uses TLS. The demo uses a local, non-production certificate chain:
 
 - `certs/otel-demo-root-ca.crt`: local demo root CA.
-- `certs/otel-collector.crt`: collector leaf certificate signed by that root CA. It has SANs for `otel-collector`, `localhost`, and `127.0.0.1`.
+- `certs/otel-demo-root-ca.crl`: local demo root CA certificate revocation list.
+- `certs/otel-collector.crt`: collector leaf certificate signed by that root CA. It has SANs for `otel-collector`, `localhost`, and `127.0.0.1`, plus CRL Distribution Points for Docker-network and host-local validation.
 - `certs/otel-collector.key`: collector leaf private key.
 
-`otel-collector.yaml` mounts the leaf certificate and private key into the collector. `OracleServer.Dockerfile` builds a local Oracle image from Oracle ADB Free `26.2.4.2-26ai` and installs `otel-demo-root-ca.crt` into Oracle Linux trust with `update-ca-trust extract`.
+`otel-collector.yaml` mounts the leaf certificate and private key into the collector. `docker-compose.yml` also starts `otel-crl`, a small HTTP server that publishes `otel-demo-root-ca.crl` at both certificate CRL Distribution Point addresses:
+
+- `http://otel-crl:8080/otel-demo-root-ca.crl` from Docker containers, including Oracle.
+- `http://localhost:8080/otel-demo-root-ca.crl` from the host.
+
+`OracleServer.Dockerfile` builds a local Oracle image from Oracle ADB Free `26.2.4.2-26ai` and installs `otel-demo-root-ca.crt` into Oracle Linux trust with `update-ca-trust extract`.
 
 This is diagnostic-only. Do not reuse these certificates or private keys outside local testing. For a real deployment, use a certificate issued by the environment's trusted CA and configure Oracle trust through the supported Oracle path for that environment.
 
@@ -49,24 +55,41 @@ issuer=CN = otel-demo-root-ca
 Verify return code: 0 (ok)
 ```
 
-To regenerate the local diagnostic certificates, run from `oracle/` on a machine with OpenSSL:
+You can also verify that the CRL is reachable and usable from inside the Oracle container:
 
 ```bash
-mkdir -p certs
-openssl genrsa -out certs/otel-demo-root-ca.key 4096
-openssl req -x509 -new -nodes -key certs/otel-demo-root-ca.key -sha256 -days 3650 -subj "/CN=otel-demo-root-ca" -out certs/otel-demo-root-ca.crt
-openssl genrsa -out certs/otel-collector.key 2048
-openssl req -new -key certs/otel-collector.key -subj "/CN=otel-collector" -out certs/otel-collector.csr
-printf "%s\n" \
-  "subjectAltName=DNS:otel-collector,DNS:localhost,IP:127.0.0.1" \
-  "basicConstraints=CA:FALSE" \
-  "keyUsage=digitalSignature,keyEncipherment" \
-  "extendedKeyUsage=serverAuth" > certs/otel-collector.ext
-openssl x509 -req -in certs/otel-collector.csr -CA certs/otel-demo-root-ca.crt -CAkey certs/otel-demo-root-ca.key -CAcreateserial -out certs/otel-collector.crt -days 3650 -sha256 -extfile certs/otel-collector.ext
-chmod 0644 certs/otel-demo-root-ca.crt certs/otel-collector.crt certs/otel-collector.key
+docker compose exec oracle bash -lc "
+  openssl s_client -showcerts -connect otel-collector:4318 -servername otel-collector -verify_return_error </dev/null 2>/tmp/otel-sclient.err |
+    sed -n '/BEGIN CERTIFICATE/,/END CERTIFICATE/p' > /tmp/otel-collector-from-server.crt
+  curl -fsS http://otel-crl:8080/otel-demo-root-ca.crl -o /tmp/otel-demo-root-ca.crl
+  openssl verify -crl_check \
+    -CAfile /etc/pki/ca-trust/source/anchors/otel-demo-root-ca.crt \
+    -CRLfile /tmp/otel-demo-root-ca.crl \
+    /tmp/otel-collector-from-server.crt
+"
 ```
 
-Only the `.crt` root, `.crt` leaf, and `.key` leaf are needed by compose. The generated root private key and CSR/extension/serial files are local regeneration artifacts and should not be committed or shared.
+Expected result:
+
+```text
+/tmp/otel-collector-from-server.crt: OK
+```
+
+From the Windows host, this should now validate without `--ssl-no-revoke` because the certificate includes a host-local CRL Distribution Point and the CRL service exposes it on port `8080`:
+
+```powershell
+curl.exe --cacert .\certs\otel-demo-root-ca.crt https://localhost:4318/v1/traces
+```
+
+Expected result is HTTP `405 Method Not Allowed`, because a browser or `curl` GET is not a valid OTLP/HTTP trace POST. The important part is that the TLS handshake no longer fails with an unknown revocation status.
+
+To regenerate the local diagnostic certificates and CRL, run from `oracle/` through an image that has OpenSSL:
+
+```powershell
+docker run --rm -v "${PWD}:/work" -w /work mcr.microsoft.com/dotnet/runtime:10.0 bash ./generate-demo-certs.sh
+```
+
+Only the `.crt` root, `.crl` revocation list, `.crt` leaf, and `.key` leaf are needed by compose. The generated root private key, CSR, and CA database files are local regeneration artifacts and should not be committed or shared.
 
 If the collector fails with `permission denied` while opening `/etc/otelcol-contrib/certs/otel-collector.key`, make the generated key readable by the non-root collector process:
 
