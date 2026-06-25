@@ -15,6 +15,7 @@ services:
       - "15220:1522"
     volumes:
       - oracle-wallets:/u01/app/oracle/wallets
+      - ./certs:/otel-demo-certs:ro
     healthcheck:
       test:
         - CMD-SHELL
@@ -22,7 +23,8 @@ services:
           bash -lc "export TNS_ADMIN=/u01/app/oracle/wallets/tls_wallet;
           printf 'set heading off feedback off pagesize 0\nselect 1 from dual;\nexit\n' |
           sqlplus -L -s ADMIN/$${ADMIN_PASSWORD}@myatp_low |
-          grep -Eq '^[[:space:]]*1[[:space:]]*$'"
+          grep -Eq '^[[:space:]]*1[[:space:]]*$' &&
+          /u01/scripts/configure-observability-wallet.sh >/tmp/configure-observability-wallet.log 2>&1"
       interval: 10s
       timeout: 15s
       retries: 90

@@ -39,6 +39,16 @@ The collector's OTLP/HTTP receiver on port `4318` therefore uses TLS. The demo u
 
 `OracleServer.Dockerfile` builds a local Oracle image from Oracle ADB Free `26.5.4.2-26ai` and installs `otel-demo-root-ca.crt` into Oracle Linux trust with `update-ca-trust extract`.
 
+Oracle server-side OTLP export does not rely on the Oracle Linux system trust bundle in this image. Per Oracle DB team feedback for DB `23.26.2`, the collector certificate must also be trusted from the database observability wallet under:
+
+```text
+$WALLET_ROOT/<PDB_GUID>/disttrc
+```
+
+ADB Free defines `WALLET_ROOT` by default as `/u01/app/oracle/wallets`. The compose healthcheck runs `configure-observability-wallet.sh` after the PDB is reachable. That script resolves the active PDB GUID, preserves the existing wallet directory casing, creates the `disttrc` auto-login wallet if needed, and adds both `otel-demo-root-ca.crt` and `otel-collector.crt` with `orapki wallet add -trusted_cert`.
+
+The `disttrc` wallet name is a `23.26.2` workaround. Oracle has indicated that this wallet name changes in `23.26.3`, so this script should be revisited when updating the database image.
+
 This is diagnostic-only. Do not reuse these certificates or private keys outside local testing. For a real deployment, use a certificate issued by the environment's trusted CA and configure Oracle trust through the supported Oracle path for that environment.
 
 You can verify from inside the Oracle container that the collector certificate chains to the local root CA:
@@ -73,6 +83,21 @@ Expected result:
 
 ```text
 /tmp/otel-collector-from-server.crt: OK
+```
+
+You can inspect the database observability wallet that the server-side exporter uses:
+
+```powershell
+docker compose exec oracle bash -lc "cat /tmp/configure-observability-wallet.log"
+```
+
+Expected result includes the active PDB-specific `disttrc` wallet and both trusted certificates. The PDB GUID path is case-sensitive on Linux and must match the directory that already exists under `WALLET_ROOT`:
+
+```text
+/u01/app/oracle/wallets/<PDB_GUID>/disttrc
+Trusted Certificates:
+Subject: CN=otel-collector
+Subject: CN=otel-demo-root-ca
 ```
 
 From the Windows host, this should now validate without `--ssl-no-revoke` because the certificate includes a host-local CRL Distribution Point and the CRL service exposes it on port `8080`:
@@ -162,22 +187,80 @@ The collector should receive telemetry from `service.name=oracle-mda-sdk-demo`:
 - ODP.NET client spans from `Oracle.ManagedDataAccess.Core`, when emitted by the driver.
 - App metrics and logs.
 
+The collector should also receive database server-side spans from `service.name=oracle-db`. In the validated local run, the Oracle server span had an empty instrumentation scope name/version, span name `DB Server`, and span kind `Server`.
+
 The app also runs:
 
 ```sql
+dbms_network_acl_admin.append_host_ace(... connect privilege for otel-collector:4318 ...);
+dbms_network_acl_admin.append_host_ace(... resolve privilege for otel-collector ...);
 dbms_observability.enable_service;
 dbms_observability.enable_service_option(option_id => dbms_observability.capture_traces);
 dbms_observability.add_endpoint(... otel_traces ...);
 dbms_observability.enable_endpoint(...);
 ```
 
-The intended comparison is whether any database server-side spans appear in collector output after that setup. If only the app/ODP.NET spans appear, the sample demonstrates the current lack of server-side spans reaching the collector.
+The local Oracle image also starts through `entrypoint-with-observability-wallet.sh`, which sets `_kstrc_service_mask=0` before the normal ADB entrypoint. This is diagnostic-only and was added because the local package comments indicate the service status can change only when the instance starts with KSTRC enabled.
+
+The intended comparison is whether database server-side spans appear in collector output after that setup and share the trace with the ODP.NET round-trip span.
 
 ## Current validation result
 
-In this environment, span context propagation from the application to the Oracle server is working.
+In this environment, span context propagation from the application to the Oracle server is working and Oracle server-side spans are exported to the collector.
 
-The evidence is the Oracle diagnostic trace archive, not a server-side OTLP span. In a clean run on the current `26.5.4.2-26ai` image, the simple select workload completed successfully and the collector received 13 app/ODP.NET span records across these scopes only:
+After applying the Oracle DB team workaround, a run verified:
+
+- `$WALLET_ROOT/<PDB_GUID>/disttrc` exists at the existing uppercase PDB GUID path and contains trusted certs for `CN=otel-collector` and `CN=otel-demo-root-ca`.
+- The database network ACL grants the configured user `connect` to `otel-collector:4318` and `resolve` for `otel-collector`.
+- `DBMS_OBSERVABILITY` reports the OTLP traces endpoint `https://otel-collector:4318/v1/traces` as enabled.
+- The collector receives both ODP.NET/app spans and an Oracle DB server-side span.
+
+The Oracle DB server span batch observed in collector output:
+
+```text
+Resource attributes:
+     -> service.name: Str(oracle-db)
+InstrumentationScope
+Span #0
+    Trace ID       : aff62c6fc94449d1d768ff83593476b7
+    Parent ID      : 632cea6d01e1fcb0
+    ID             : 4d8a00d02f47160d
+    Name           : DB Server
+    Kind           : Server
+Attributes:
+     -> db.system.name: Str(oracle.db)
+     -> oracle.db.instance.name: Str(POD1)
+     -> oracle.db.name: Str(POD1)
+     -> oracle.db.service: Str(MYATP_low.adb.oraclecloud.com)
+     -> db.namespace: Str(POD1)
+     -> db.response.status_code: Str(ORA-0)
+     -> oracle.db.pdb: Str(MYATP)
+```
+
+The instrumentation scope for the Oracle server-side span is empty in this image. The stable identifiers to assert are currently `service.name=oracle-db`, span name `DB Server`, span kind `Server`, and parentage under the ODP.NET round-trip span.
+
+The same trace appears in the ODP.NET client spans:
+
+```text
+InstrumentationScope Oracle.ManagedDataAccess.Core 23.26.200
+Span #2
+    Trace ID       : aff62c6fc94449d1d768ff83593476b7
+    Parent ID      : e8bacd9eb696d907
+    ID             : 632cea6d01e1fcb0
+    Name           : SendExecuteRequest
+    Kind           : Client
+```
+
+The 1000-iteration DML workload after the PDB GUID casing fix produced 1004 Oracle DB server-side spans in collector output:
+
+```text
+Name           : DB Server
+Kind           : Server
+Resource service.name: oracle-db
+InstrumentationScope: empty
+```
+
+The simple select workload also produced app/ODP.NET span records across these scopes:
 
 ```text
 InstrumentationScope Oracle.ManagedDataAccess.Core 23.26.200
@@ -197,11 +280,9 @@ KSTRC: Operation [traceid-8af78a326f57bdbc7e52acc020f111aa:parentid-63a8c0371452
 KSTRC: Operation [traceid-3ffeb44f3b856853c82c795542b03584:parentid-6a299fcd218c0152] ... archived to: ksu_ops_POD1.trc
 ```
 
-That confirms that the trace context reached the Oracle server and was associated with server-side work.
+The diagnostic trace archive also confirms that trace context reached the Oracle server and was associated with server-side work.
 
-However, no separate Oracle server-side OTLP trace spans were observed on the collector in this setup. The collector received the app/ODP.NET spans from `service.name=oracle-mda-sdk-demo`, but after waiting for delayed export, there was no additional trace batch attributable to the Oracle server.
-
-On the current newer image, `DBMS_OBSERVABILITY` reports the OTLP endpoint as enabled but runtime traces/logs as disabled:
+One confusing detail remains: on the current newer image, `DBMS_OBSERVABILITY` still reports runtime traces/logs as disabled even when a server-side span has been exported:
 
 ```text
 Runtime Service "Traces": Disabled
@@ -210,10 +291,7 @@ Option "Capture traces": Enabled
 Endpoint "https://otel-collector:4318/v1/traces": Enabled
 ```
 
-The exposed `DBMS_OBSERVABILITY` package surface did not show a flush/export procedure that could force queued spans to be sent immediately. So the current conclusion is:
-
-- Propagation to the Oracle server: validated through Oracle diagnostic trace archive.
-- Server-side OTLP span export to the collector: not observed in this demo run.
+Treat collector output as the source of truth for export validation in this local setup.
 
 The 1000-iteration DML workload can be used to generate more database work:
 
@@ -221,14 +299,14 @@ The 1000-iteration DML workload can be used to generate more database work:
 docker compose run --rm --no-deps -e WORKLOAD=dml -e ITERATIONS=1000 -e DELAY_SECONDS=0 -e FLUSH_SECONDS=60 -e LOG_EVERY=100 app
 ```
 
-A previous 1000-iteration DML run produced 5010 app/ODP.NET spans across these scopes only:
+A previous 1000-iteration DML run before the PDB GUID casing fix produced 5010 app/ODP.NET spans across these scopes only:
 
 ```text
 InstrumentationScope Oracle.ManagedDataAccess.Core 23.26.200
 InstrumentationScope OracleMdaSdkDemo 1.0.0
 ```
 
-The Oracle diagnostic archive contained 2008 `KSTRC` archived operations, confirming propagated context at volume, but no separate Oracle server-side OTLP spans appeared in collector output.
+The Oracle diagnostic archive contained 2008 `KSTRC` archived operations, confirming propagated context at volume. After the uppercase `disttrc` wallet fix, the same high-volume DML path exported Oracle DB server-side spans to the collector.
 
 ## Local run
 

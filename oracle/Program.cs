@@ -154,8 +154,41 @@ static async Task WaitForOracleAsync(string connectionString, DemoSettings setti
 static async Task TryConfigureDatabaseObservabilityAsync(string connectionString, DemoSettings settings, ILogger logger)
 {
     var endpoint = EscapeSqlLiteral(settings.DatabaseOtlpTracesEndpoint.ToString());
+    var endpointHost = EscapeSqlLiteral(settings.DatabaseOtlpTracesEndpoint.Host);
+    var endpointPort = settings.DatabaseOtlpTracesEndpoint.Port;
+    var aclPrincipal = EscapeSqlLiteral(settings.OracleUser.ToUpperInvariant());
     var sql = @"
 begin
+  begin
+    dbms_network_acl_admin.append_host_ace(
+      host => '" + endpointHost + @"',
+      lower_port => " + endpointPort + @",
+      upper_port => " + endpointPort + @",
+      ace => xs$ace_type(
+        privilege_list => xs$name_list('connect'),
+        principal_name => '" + aclPrincipal + @"',
+        principal_type => xs_acl.ptype_db));
+  exception
+    when others then
+      if sqlcode != -24243 and instr(sqlerrm, 'already exists') = 0 then
+        raise;
+      end if;
+  end;
+
+  begin
+    dbms_network_acl_admin.append_host_ace(
+      host => '" + endpointHost + @"',
+      ace => xs$ace_type(
+        privilege_list => xs$name_list('resolve'),
+        principal_name => '" + aclPrincipal + @"',
+        principal_type => xs_acl.ptype_db));
+  exception
+    when others then
+      if sqlcode != -24243 and instr(sqlerrm, 'already exists') = 0 then
+        raise;
+      end if;
+  end;
+
   dbms_observability.enable_service;
   dbms_observability.enable_service_option(option_id => dbms_observability.capture_traces);
   dbms_observability.add_endpoint(
@@ -172,7 +205,11 @@ end;";
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
         await command.ExecuteNonQueryAsync().ConfigureAwait(false);
-        logger.LogInformation("Configured DBMS_OBSERVABILITY endpoint: {Endpoint}", settings.DatabaseOtlpTracesEndpoint);
+        logger.LogInformation(
+            "Configured DBMS_OBSERVABILITY endpoint and network ACL for {EndpointHost}:{EndpointPort}: {Endpoint}",
+            settings.DatabaseOtlpTracesEndpoint.Host,
+            settings.DatabaseOtlpTracesEndpoint.Port,
+            settings.DatabaseOtlpTracesEndpoint);
     }
     catch (OracleException ex)
     {
